@@ -4,21 +4,35 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <pre id="out">啟動中…</pre>
 <script>
-const LIFF_ID='2008311996-D2KEdEnm';
-const GAS_URL='https://script.google.com/macros/s/AKfycbxi74TIU0kaY3kGCRi04-QRaTO8A03DiyIEII-qSwTZm12Kd9F801s5VhsyJnTJ4BXq/exec';
+const LIFF_ID = '2008311996-D2KEdEnm';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyRR-UxNfnJqZ7zJ4_660dCQShVGPhCEv81xldstO5fKct5y0E-u-QbhApJ8t0yS_v7/exec';
 
 (async () => {
   try {
     await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
     if (!liff.isLoggedIn()) { liff.login(); return; }
-    const p = await liff.getProfile();
-    document.getElementById('out').textContent = 'OK\n' + JSON.stringify(p,null,2);
 
-    // 測寫入
-    await fetch(GAS_URL, {method:'POST',headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ userId:p.userId, displayName:p.displayName, action:'test', source:'liff'})});
-  } catch(e) {
-    document.getElementById('out').textContent = 'ERR\n'+(e.code||'')+'\n'+(e.message||e);
+    const p = await liff.getProfile();
+    document.getElementById('out').textContent = 'OK\n' + JSON.stringify(p, null, 2);
+
+    // ⭐ 用 text/plain 避免 CORS 預檢（OPTIONS）
+    const payload = {
+      userId: p.userId,
+      displayName: p.displayName,
+      action: 'test',
+      source: 'liff'
+    };
+
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
+    const txt = await resp.text(); // 也可以 resp.json()，先用 text 看原始回應
+    console.log('GAS response:', txt);
+  } catch (e) {
+    document.getElementById('out').textContent = 'ERR\n' + (e.code || '') + '\n' + (e.message || e);
   }
 })();
 </script>
