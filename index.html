@@ -5,8 +5,7 @@
 <style>
   :root{
     --bg:#0b0b12; --card:#121225; --text:#e5e7eb; --muted:#9ca3af;
-    --brand:#6D28D9; --brand-2:#8B5CF6; --ok:#10b981; --err:#ef4444;
-    --accent:#C4B5FD;
+    --brand:#6D28D9; --brand-2:#8B5CF6; --ok:#10b981; --err:#ef4444; --accent:#C4B5FD;
   }
   html,body{height:100%;}
   body{
@@ -49,6 +48,7 @@
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-weight:900; font-size:64px; letter-spacing:1px; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.3);
     filter: drop-shadow(0 6px 18px rgba(0,0,0,.35));
+    transition: transform .2s ease, opacity .2s ease;
   }
   .subtitle{
     position:absolute; bottom:8px; width:100%; text-align:center; font-size:13px; color:#f0f0f0; opacity:.9;
@@ -66,16 +66,9 @@
 
   /* 抽中：POP + GLOW */
   .pop{animation:pop .5s ease-out forwards}
-  @keyframes pop{
-    0%{transform:scale(0.9)}
-    60%{transform:scale(1.08)}
-    100%{transform:scale(1)}
-  }
+  @keyframes pop{0%{transform:scale(0.9)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
   .glow{box-shadow:0 0 0 0 rgba(197,181,253,.75); animation:glow .9s ease-out 2}
-  @keyframes glow{
-    0%{box-shadow:0 0 0 0 rgba(197,181,253,.75)}
-    100%{box-shadow:0 0 30px 12px rgba(197,181,253,0)}
-  }
+  @keyframes glow{0%{box-shadow:0 0 0 0 rgba(197,181,253,.75)}100%{box-shadow:0 0 30px 12px rgba(197,181,253,0)}}
 
   /* confetti */
   canvas#confetti{position:fixed; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:5}
@@ -90,6 +83,11 @@
   const LIFF_ID  = '2008311996-D2KEdEnm';  // 你的 LIFF ID
   const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec'; // 你的 GAS /exec
   const DEFAULT_MODE = 'prod'; // 預設 prod；用 ?mode=dev 可切換
+
+  // 🎰 數字輪播設定
+  const ROLL_MIN_MS = 800;   // 最短轉動時間（確保有轉到）
+  const ROLL_SPEED_MS = 45;  // 每幀字變化間隔（越小越快）
+  const ROLL_DIGITS = 3;     // 顯示位數（3 → 001~999）
 </script>
 
 <canvas id="confetti"></canvas>
@@ -110,14 +108,8 @@
     </div>
 
     <div class="grid" style="margin-top:12px">
-      <div>
-        <div class="muted">狀態</div>
-        <div id="status" class="ok">啟動中</div>
-      </div>
-      <div style="text-align:right">
-        <div class="muted">關閉倒數</div>
-        <div id="countdown" class="count">—</div>
-      </div>
+      <div><div class="muted">狀態</div><div id="status" class="ok">啟動中</div></div>
+      <div style="text-align:right"><div class="muted">關閉倒數</div><div id="countdown" class="count">—</div></div>
     </div>
 
     <div id="logWrap" style="margin-top:12px; display:none">
@@ -148,22 +140,40 @@
 
   const setStatus = (t, cls='')=>{ const el=$('status'); el.textContent=t; el.className=cls||''; };
   const setHint = (t)=>{ $('sub').textContent = t; };
-  const setNum = (t)=>{ $('num').textContent = t; };
 
-  // 倒數關閉
-  function autoClose(seconds){
-    const el=$('countdown'); let n=seconds;
-    const timer=setInterval(()=>{
-      el.textContent = n + 's'; n--;
-      if(n<0){
-        clearInterval(timer);
-        if(!isDev){
-          try{ if (liff.isInClient()) liff.closeWindow(); else window.close(); }catch(_){}
-        }else{
-          $('closeNow').style.display='inline-block';
-        }
+  // 🎰 數字輪播
+  let rolling = false, rollTimer = 0, lastRollTs = 0, rollStartTs = 0;
+  function randomNum(max=999){
+    const n = Math.floor(Math.random()*(max+1));
+    return '#' + String(n).padStart(ROLL_DIGITS, '0');
+  }
+  function startRolling(){
+    if (rolling) return;
+    rolling = true;
+    rollStartTs = performance.now();
+    const el=$('num');
+    const loop = (t)=>{
+      if (!rolling) return;
+      if (!lastRollTs || (t - lastRollTs) >= ROLL_SPEED_MS){
+        el.textContent = randomNum(999);
+        lastRollTs = t;
       }
-    },1000);
+      rollTimer = requestAnimationFrame(loop);
+    };
+    rollTimer = requestAnimationFrame(loop);
+  }
+  function stopRolling(finalNumberText){
+    if (!rolling) return;
+    rolling = false;
+    if (rollTimer) cancelAnimationFrame(rollTimer);
+    const el=$('num');
+    el.style.opacity='0';
+    setTimeout(()=>{
+      el.textContent = finalNumberText;
+      el.style.opacity='1';
+      // POP/GLOW 特效 + confetti
+      hitEffects();
+    }, 120);
   }
 
   // confetti（簡易、效能佳）
@@ -171,7 +181,7 @@
     const canvas = $('confetti');
     const ctx = canvas.getContext('2d');
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    function resize(){ canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr; ctx.scale(dpr,dpr); }
+    function resize(){ canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
     resize(); window.addEventListener('resize', resize, {once:true});
 
     const colors = ['#8B5CF6','#6D28D9','#C4B5FD','#ffffff'];
@@ -189,28 +199,36 @@
       ctx.clearRect(0,0,innerWidth,innerHeight);
       pieces.forEach(p=>{
         p.a += 0.1; p.x += p.vx; p.y += p.vy;
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.a);
-        ctx.fillStyle = p.c;
-        ctx.fillRect(-p.r, -p.r, p.r*2, p.r*2);
-        ctx.restore();
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+        ctx.fillStyle = p.c; ctx.fillRect(-p.r, -p.r, p.r*2, p.r*2); ctx.restore();
       });
-      t++;
-      if (t<maxT) requestAnimationFrame(draw); else ctx.clearRect(0,0,innerWidth,innerHeight);
+      t++; if (t<maxT) requestAnimationFrame(draw); else ctx.clearRect(0,0,innerWidth,innerHeight);
     })();
   }
-
-  // 抽中特效
   function hitEffects(){
     const t = $('ticket');
-    t.classList.remove('pop','glow'); // reset
-    void t.offsetWidth;               // reflow to restart animations
+    t.classList.remove('pop','glow'); void t.offsetWidth; // restart
     t.classList.add('pop','glow');
     confettiBurst();
   }
 
-  // 傳送到 GAS（POST 回傳 JSON → 可拿到 ticket）
+  // 倒數關閉
+  function autoClose(seconds){
+    const el=$('countdown'); let n=seconds;
+    const timer=setInterval(()=>{
+      el.textContent = n + 's'; n--;
+      if(n<0){
+        clearInterval(timer);
+        if(!isDev){
+          try{ if (liff.isInClient()) liff.closeWindow(); else window.close(); }catch(_){}
+        }else{
+          $('closeNow').style.display='inline-block';
+        }
+      }
+    },1000);
+  }
+
+  // 傳送到 GAS（POST 回傳 JSON → 可拿到 ticket；失敗用 Beacon）
   async function sendToGas(payload){
     try{
       const res = await fetch(GAS_EXEC, {
@@ -220,11 +238,9 @@
       });
       log('POST status', res.status);
       const data = await res.json().catch(()=>null);
-      log('POST json', data);
       return { channel:'ok:fetch', data };
     }catch(e){
       log('POST failed → beacon', e?.message||e);
-      // Beacon（無回傳，僅通知後端推送）
       const u = new URL(GAS_EXEC);
       u.searchParams.set('userId', payload.userId);
       u.searchParams.set('name', payload.displayName || '');
@@ -251,42 +267,33 @@
     }
 
     $('stepHint').textContent = '取得使用者…';
-    const prof = await liff.getProfile();
-    log('profile', prof);
+    const prof = await liff.getProfile(); log('profile', prof);
 
-    // 動畫文案
+    // 動畫文案＋開啟輪播
     if (action === 'renew') setHint('正在重新領取新號碼…');
     else if (action === 'view') setHint('查詢您的號碼牌…');
     else setHint('正在抽取您的號碼…');
+    startRolling();
 
-    // 送出
+    // 送出請求（確保輪播至少跑 ROLL_MIN_MS）
     setStatus('送出中…','muted');
-    const { channel, data } = await sendToGas({
-      userId: prof.userId,
-      displayName: prof.displayName,
-      action,
-      source:'liff'
-    });
+    const startAt = performance.now();
+    const { channel, data } = await sendToGas({ userId: prof.userId, displayName: prof.displayName, action, source:'liff' });
+    const elapsed = performance.now() - startAt;
+    const waitMore = Math.max(0, ROLL_MIN_MS - elapsed);
+    await new Promise(r => setTimeout(r, waitMore));
 
-    // 嘗試從回傳取出 ticket
     const ticket = data && data.result && data.result.ticket ? data.result.ticket : null;
-    const modeStr = data && data.result && data.result.mode;
 
     if (ticket){
-      // 🎉 有票號 → 畫面顯示號碼 + 特效
-      setNum('#' + ticket);
-      if (action === 'view') setHint('找到您的號碼！');
-      else if (action === 'renew') setHint('已重新領取成功！');
-      else setHint('恭喜抽中！');
-      hitEffects();
+      // 🎉 停在真正號碼
+      stopRolling('#' + ticket);
       $('openChat').style.display='inline-block';
-
-      // 自動關閉：view 3s，其他 5s
-      autoClose(action === 'view' ? 3 : 5);
       setStatus((action==='view'?'查看完成':'發送成功') + '，請回聊天室查看 Flex 訊息 📨','ok');
+      autoClose(action === 'view' ? 3 : 5);
     } else {
-      // 沒有票號（多半是走到 Beacon 或後端僅推播不回值）
-      setNum('—');
+      // 沒票號（多半 Beacon）→ 優雅收尾
+      stopRolling('—');
       if (action === 'view') setHint('已送出查看請求，請回聊天室查看');
       else if (action === 'renew') setHint('重新領取已送出，請回聊天室查看');
       else setHint('已送出取號，請回聊天室查看');
@@ -295,12 +302,13 @@
       autoClose(action === 'view' ? 3 : 5);
     }
 
-    log('channel', channel, 'mode', modeStr, 'ticket', ticket);
+    log('channel', channel, 'ticket', ticket);
 
   }catch(e){
     setStatus('發生錯誤：' + (e?.message || e), 'err'); log('error', e);
     setHint('請返回上一頁或稍後再試');
     $('openChat').style.display='inline-block';
+    try{ stopRolling('—'); }catch(_){}
   }
 })();
 </script>
