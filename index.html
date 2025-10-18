@@ -11,7 +11,7 @@
 
 <!-- 換成你的值 -->
 <script>
-  const LIFF_ID  = '2008311996-D2KEdEnm';                             // 你的 LIFF ID
+  const LIFF_ID  = '2008311996-D2KEdEnm';  // 你的 LIFF ID
   const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec'; // 你的 GAS /exec
 </script>
 
@@ -22,42 +22,42 @@
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
-  let SENT=false;
+  // 讀取 URL 參數：'default'（取號） | 'view'（查看） | 'renew'（重新領取）
   const qs = new URL(location.href).searchParams;
-  const actionParam = qs.get('action') || 'default'; // 'view' | 'renew' | 'default'
-  const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
-  const sentKey=(uid,act)=>`liff_sent:${LIFF_ID}:${uid}:${today()}:${act}`;
+  const action = (qs.get('action') || 'default').toLowerCase();
 
-  async function sendOnce(payload){
-    if(SENT) return 'skip:flag';
-    const key=sentKey(payload.userId,payload.action);
-    if(sessionStorage.getItem(key)) return 'skip:session';
-    SENT=true; sessionStorage.setItem(key,'1');
+  // 只對「default 取號」做輕量防連點；view/renew 不節流，避免「按了沒反應」
+  const today = () => {
+    const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  const sentKey = (uid, act) => `liff_sent:${LIFF_ID}:${uid}:${today()}:${act}`;
 
-    // 1) 首選：POST（text/plain 可避 iOS 預檢）
+  async function sendToGas(payload){
+    // 1) 首選：POST（text/plain 避 iOS 預檢）
     try{
       await fetch(GAS_EXEC,{
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify(payload)
       });
-      return'ok:fetch';
+      return 'ok:fetch';
     }catch(_){
       // 2) 失敗 → Beacon GET（必過 CORS）
       const u=new URL(GAS_EXEC);
-      u.searchParams.set('userId',payload.userId);
-      u.searchParams.set('name',payload.displayName||'');
-      u.searchParams.set('action',payload.action);
-      u.searchParams.set('source',payload.source||'liff');
-      u.searchParams.set('cb',Date.now());
-      (new Image()).src=u.toString();
-      return'ok:beacon';
+      u.searchParams.set('userId', payload.userId);
+      u.searchParams.set('name',   payload.displayName || '');
+      u.searchParams.set('action', payload.action);
+      u.searchParams.set('source', payload.source || 'liff');
+      u.searchParams.set('cb', Date.now()); // cache buster，避免 iOS 不重載
+      (new Image()).src = u.toString();
+      return 'ok:beacon';
     }
   }
 
   (async()=>{
-    const s1=document.getElementById('s1'),s2=document.getElementById('s2'),s3=document.getElementById('s3'),s4=document.getElementById('s4');
-    const P=document.getElementById('p'),LOG=document.getElementById('log');
+    const s1=document.getElementById('s1'), s2=document.getElementById('s2'),
+          s3=document.getElementById('s3'), s4=document.getElementById('s4'),
+          P=document.getElementById('p'),  LOG=document.getElementById('log');
 
     try{
       s1.textContent='初始化中…';
@@ -67,16 +67,35 @@
       if(!liff.isLoggedIn()){ s2.textContent='未登入 → 導向登入'; liff.login(); return; }
       s2.innerHTML='<span class="ok">已登入</span>';
 
-      const prof=await liff.getProfile();
-      s3.innerHTML='<span class="ok">成功</span>'; P.textContent=JSON.stringify(prof,null,2);
+      const prof = await liff.getProfile();
+      s3.innerHTML='<span class="ok">成功</span>';
+      P.textContent = JSON.stringify(prof, null, 2);
 
-      const payload={ userId: prof.userId, displayName: prof.displayName, action: actionParam, source:'liff' };
-      const ch=await sendOnce(payload);
-      s4.innerHTML='<span class="ok">已送出</span>'; LOG.textContent=`action=${actionParam}\nchannel=${ch}\n${JSON.stringify(payload)}`;
+      // default：一天只送一次（前端側防手抖；後端也有去重 & 節流，雙保險）
+      if (action === 'default') {
+        const key = sentKey(prof.userId, 'default');
+        if (sessionStorage.getItem(key)) {
+          s4.innerHTML = '<span class="muted">今日已送出</span>';
+          LOG.textContent = '您今天已送出取號，請回聊天室查看訊息。';
+          return;
+        }
+        sessionStorage.setItem(key, '1');
+      }
 
-      // 取號 / 查看 / 重新領取 的 Flex 會由 GAS 直接推回使用者聊天室
+      const payload = { userId: prof.userId, displayName: prof.displayName, action, source:'liff' };
+      const channel = await sendToGas(payload);
+
+      s4.innerHTML = '<span class="ok">已送出</span>';
+      if (action === 'view') {
+        LOG.textContent = `已送出「查看號碼牌」請求，請回到聊天室查看訊息。\n(${channel})`;
+      } else if (action === 'renew') {
+        LOG.textContent = `已送出「重新領取」請求，請回到聊天室查看訊息。\n(${channel})`;
+      } else {
+        LOG.textContent = `已送出取號，請回到聊天室查看號碼牌。\n(${channel})`;
+      }
     }catch(e){
-      s1.innerHTML='<span class="err">失敗</span>'; LOG.textContent=String(e?.message||e);
+      s1.innerHTML='<span class="err">失敗</span>';
+      LOG.textContent = (e && e.message) ? e.message : String(e);
     }
   })();
 </script>
