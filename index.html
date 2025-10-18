@@ -1,116 +1,82 @@
 <!doctype html>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>LIFF 前端</title>
-
-<!-- 1) 替換成你的 LIFF ID 與 GAS /exec -->
-<script>
-  const LIFF_ID  = '2008311996-D2KEdEnm';  // ← 換成你的
-  const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec'; // ← 換成你的 /exec
-  const DEFAULT_ACTION = 'test';           // 可改成對應圖文按鈕的代碼
-</script>
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIFF 取號</title>
 <style>
-  body { font-family: -apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif; padding: 20px; }
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif;padding:20px}
   .ok{color:#16a34a}.err{color:#dc2626}.muted{color:#6b7280}
-  pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
   .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
+  pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
 </style>
+
+<!-- 換成你的值 -->
+<script>
+  const LIFF_ID  = '2008311996-D2KEdEnm';                             // 你的 LIFF ID
+  const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec'; // 你的 GAS /exec
+</script>
 
 <div class="card"><b>Step 1.</b> 初始化 LIFF… <span id="s1" class="muted"></span></div>
 <div class="card"><b>Step 2.</b> 登入狀態 <span id="s2" class="muted"></span></div>
-<div class="card">
-  <b>Step 3.</b> 取得使用者資料 <span id="s3" class="muted"></span>
-  <pre id="profile" class="muted"></pre>
-</div>
-<div class="card">
-  <b>Step 4.</b> 寫入試算表（只送一次） <span id="s4" class="muted"></span>
-  <pre id="log" class="muted"></pre>
-</div>
+<div class="card"><b>Step 3.</b> 取得使用者資料 <span id="s3" class="muted"></span><pre id="p" class="muted"></pre></div>
+<div class="card"><b>Step 4.</b> 送出動作 <span id="s4" class="muted"></span><pre id="log" class="muted"></pre></div>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
-  let SENT = false; // 旗標：本次頁面生命週期內只送一次
+  let SENT=false;
+  const qs = new URL(location.href).searchParams;
+  const actionParam = qs.get('action') || 'default'; // 'view' | 'renew' | 'default'
+  const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+  const sentKey=(uid,act)=>`liff_sent:${LIFF_ID}:${uid}:${today()}:${act}`;
 
-  function todayStr() {
-    const d = new Date();
-    const m = (''+(d.getMonth()+1)).padStart(2,'0');
-    const day = (''+d.getDate()).padStart(2,'0');
-    return `${d.getFullYear()}-${m}-${day}`; // e.g., 2025-10-18
-  }
+  async function sendOnce(payload){
+    if(SENT) return 'skip:flag';
+    const key=sentKey(payload.userId,payload.action);
+    if(sessionStorage.getItem(key)) return 'skip:session';
+    SENT=true; sessionStorage.setItem(key,'1');
 
-  function sentKey(userId, action) {
-    return `liff_sent:${LIFF_ID}:${userId}:${todayStr()}:${action||DEFAULT_ACTION}`;
-  }
-
-  async function sendOnce(payload) {
-    if (SENT) return 'skipped:already-sent-flag';
-    const key = sentKey(payload.userId, payload.action);
-    if (sessionStorage.getItem(key)) {
-      return 'skipped:sessionStorage';
-    }
-    // 標記已送，防止重複（就算等下 fetch 失敗也會 fallback 到 beacon）
-    SENT = true;
-    sessionStorage.setItem(key, '1');
-
-    // 先試 fetch（text/plain 可避免某些 iOS 預檢）
-    try {
-      await fetch(GAS_EXEC, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    // 1) 首選：POST（text/plain 可避 iOS 預檢）
+    try{
+      await fetch(GAS_EXEC,{
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify(payload)
       });
-      return 'ok:fetch';
-    } catch (e) {
-      // fallback：Beacon 圖片 GET（不加入 DOM、不監聽錯誤）
-      const u = new URL(GAS_EXEC);
-      u.searchParams.set('userId', payload.userId);
-      u.searchParams.set('name', payload.displayName || '');
-      u.searchParams.set('action', payload.action || DEFAULT_ACTION);
-      u.searchParams.set('source', payload.source || 'liff');
-      u.searchParams.set('cb', Date.now()); // cache buster
-      (new Image()).src = u.toString();     // 只需觸發請求，不需顯示
-      return 'ok:beacon';
+      return'ok:fetch';
+    }catch(_){
+      // 2) 失敗 → Beacon GET（必過 CORS）
+      const u=new URL(GAS_EXEC);
+      u.searchParams.set('userId',payload.userId);
+      u.searchParams.set('name',payload.displayName||'');
+      u.searchParams.set('action',payload.action);
+      u.searchParams.set('source',payload.source||'liff');
+      u.searchParams.set('cb',Date.now());
+      (new Image()).src=u.toString();
+      return'ok:beacon';
     }
   }
 
-  (async () => {
-    const s1 = document.getElementById('s1');
-    const s2 = document.getElementById('s2');
-    const s3 = document.getElementById('s3');
-    const s4 = document.getElementById('s4');
-    const $profile = document.getElementById('profile');
-    const $log = document.getElementById('log');
+  (async()=>{
+    const s1=document.getElementById('s1'),s2=document.getElementById('s2'),s3=document.getElementById('s3'),s4=document.getElementById('s4');
+    const P=document.getElementById('p'),LOG=document.getElementById('log');
 
-    try {
-      s1.textContent = '初始化中…';
-      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-      s1.innerHTML = '<span class="ok">完成</span>';
+    try{
+      s1.textContent='初始化中…';
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser:true });
+      s1.innerHTML='<span class="ok">完成</span>';
 
-      if (!liff.isLoggedIn()) {
-        s2.textContent = '未登入 → 導向登入';
-        liff.login(); return;
-      }
-      s2.innerHTML = '<span class="ok">已登入</span>';
+      if(!liff.isLoggedIn()){ s2.textContent='未登入 → 導向登入'; liff.login(); return; }
+      s2.innerHTML='<span class="ok">已登入</span>';
 
-      const prof = await liff.getProfile();
-      s3.innerHTML = '<span class="ok">成功</span>';
-      $profile.textContent = JSON.stringify(prof, null, 2);
+      const prof=await liff.getProfile();
+      s3.innerHTML='<span class="ok">成功</span>'; P.textContent=JSON.stringify(prof,null,2);
 
-      const payload = {
-        userId: prof.userId,
-        displayName: prof.displayName,
-        action: DEFAULT_ACTION, // 可依不同圖文按鈕改值
-        source: 'liff'
-      };
+      const payload={ userId: prof.userId, displayName: prof.displayName, action: actionParam, source:'liff' };
+      const ch=await sendOnce(payload);
+      s4.innerHTML='<span class="ok">已送出</span>'; LOG.textContent=`action=${actionParam}\nchannel=${ch}\n${JSON.stringify(payload)}`;
 
-      const result = await sendOnce(payload);
-      s4.innerHTML = '<span class="ok">已送出</span>';
-      $log.textContent = `channel=${result}\npayload=${JSON.stringify(payload)}`;
-
-    } catch (e) {
-      s1.innerHTML = '<span class="err">失敗</span>';
-      $log.textContent = String(e?.message || e);
+      // 取號 / 查看 / 重新領取 的 Flex 會由 GAS 直接推回使用者聊天室
+    }catch(e){
+      s1.innerHTML='<span class="err">失敗</span>'; LOG.textContent=String(e?.message||e);
     }
   })();
 </script>
