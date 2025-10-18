@@ -15,22 +15,15 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbyRR-UxNfnJqZ7zJ4_660dC
     const p = await liff.getProfile();
     document.getElementById('out').textContent = 'OK\n' + JSON.stringify(p, null, 2);
 
-    // ⭐ 用 text/plain 避免 CORS 預檢（OPTIONS）
-    const payload = {
-      userId: p.userId,
-      displayName: p.displayName,
-      action: 'test',
-      source: 'liff'
-    };
+    // 用圖片 Beacon 送資料（完全避開 CORS）
+    const u = new URL(GAS_URL);
+    u.searchParams.set('userId', p.userId);
+    u.searchParams.set('name',   p.displayName);
+    u.searchParams.set('action', 'test');
+    u.searchParams.set('source', 'liff');
 
-    const resp = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-
-    const txt = await resp.text(); // 也可以 resp.json()，先用 text 看原始回應
-    console.log('GAS response:', txt);
+    const img = new Image();
+    img.src = u.toString(); // 一載入就會觸發 GAS，GAS 會寫入試算表
   } catch (e) {
     document.getElementById('out').textContent = 'ERR\n' + (e.code || '') + '\n' + (e.message || e);
   }
