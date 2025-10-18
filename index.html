@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIFF 前端</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<pre id="out">啟動中…</pre>
+<script>
+const LIFF_ID='2008311996-D2KEdEnm';
+const GAS_URL='https://script.google.com/macros/s/你的EXEC/exec';
+
+(async () => {
+  try {
+    await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    const p = await liff.getProfile();
+    document.getElementById('out').textContent = 'OK\n' + JSON.stringify(p,null,2);
+
+    // 測寫入
+    await fetch(GAS_URL, {method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId:p.userId, displayName:p.displayName, action:'test', source:'liff'})});
+  } catch(e) {
+    document.getElementById('out').textContent = 'ERR\n'+(e.code||'')+'\n'+(e.message||e);
+  }
+})();
+</script>
