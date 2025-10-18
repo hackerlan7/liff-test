@@ -1,50 +1,116 @@
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<pre id="out">啟動中…</pre>
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>LIFF 前端</title>
+
+<!-- 1) 替換成你的 LIFF ID 與 GAS /exec -->
 <script>
-const LIFF_ID  = '2008311996-D2KEdEnm';
-const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbx9GCyBJVC3DmfykG8Jgf9_N_cIp2EMj1Xh5k9UJkPh5N7N67z8rFF8qgtzrQHscNYU/exec';
+  const LIFF_ID  = '2008311996-D2KEdEnm';  // ← 換成你的
+  const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbw3d6VFbYpdrRbkyteb8osg_CWREXuUlq-QfskSW8YgohuWxBNwjBdwtZh_oNPPUrJu/exec'; // ← 換成你的 /exec
+  const DEFAULT_ACTION = 'test';           // 可改成對應圖文按鈕的代碼
+</script>
 
-(async () => {
-  try {
-    await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+<style>
+  body { font-family: -apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif; padding: 20px; }
+  .ok{color:#16a34a}.err{color:#dc2626}.muted{color:#6b7280}
+  pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
+  .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
+</style>
 
-    const p = await liff.getProfile();
-    document.getElementById('out').textContent = 'OK\n' + JSON.stringify(p, null, 2);
+<div class="card"><b>Step 1.</b> 初始化 LIFF… <span id="s1" class="muted"></span></div>
+<div class="card"><b>Step 2.</b> 登入狀態 <span id="s2" class="muted"></span></div>
+<div class="card">
+  <b>Step 3.</b> 取得使用者資料 <span id="s3" class="muted"></span>
+  <pre id="profile" class="muted"></pre>
+</div>
+<div class="card">
+  <b>Step 4.</b> 寫入試算表（只送一次） <span id="s4" class="muted"></span>
+  <pre id="log" class="muted"></pre>
+</div>
 
-    const payload = { userId: p.userId, displayName: p.displayName, action: 'test', source: 'liff' };
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  let SENT = false; // 旗標：本次頁面生命週期內只送一次
 
-    // 先試 fetch（某些環境可通）
-    let sent = false;
+  function todayStr() {
+    const d = new Date();
+    const m = (''+(d.getMonth()+1)).padStart(2,'0');
+    const day = (''+d.getDate()).padStart(2,'0');
+    return `${d.getFullYear()}-${m}-${day}`; // e.g., 2025-10-18
+  }
+
+  function sentKey(userId, action) {
+    return `liff_sent:${LIFF_ID}:${userId}:${todayStr()}:${action||DEFAULT_ACTION}`;
+  }
+
+  async function sendOnce(payload) {
+    if (SENT) return 'skipped:already-sent-flag';
+    const key = sentKey(payload.userId, payload.action);
+    if (sessionStorage.getItem(key)) {
+      return 'skipped:sessionStorage';
+    }
+    // 標記已送，防止重複（就算等下 fetch 失敗也會 fallback 到 beacon）
+    SENT = true;
+    sessionStorage.setItem(key, '1');
+
+    // 先試 fetch（text/plain 可避免某些 iOS 預檢）
     try {
-      const res = await fetch(GAS_EXEC, {
+      await fetch(GAS_EXEC, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避免 CORS 預檢
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-      // 只要請求送出就算成功，不必依賴讀取回應
-      sent = true;
-    } catch (_) {}
-
-    // 若 fetch 失敗，改用 Beacon 圖片（不渲染、不顯示錯誤）
-    if (!sent) {
+      return 'ok:fetch';
+    } catch (e) {
+      // fallback：Beacon 圖片 GET（不加入 DOM、不監聽錯誤）
       const u = new URL(GAS_EXEC);
       u.searchParams.set('userId', payload.userId);
-      u.searchParams.set('name',   payload.displayName);
-      u.searchParams.set('action', payload.action);
-      u.searchParams.set('source', payload.source);
+      u.searchParams.set('name', payload.displayName || '');
+      u.searchParams.set('action', payload.action || DEFAULT_ACTION);
+      u.searchParams.set('source', payload.source || 'liff');
       u.searchParams.set('cb', Date.now()); // cache buster
-      // 只觸發請求，不加入 DOM、不監聽 onerror（避免「Load failed」字樣）
-      (new Image()).src = u.toString();
-      sent = true;
+      (new Image()).src = u.toString();     // 只需觸發請求，不需顯示
+      return 'ok:beacon';
     }
-
-    // 給使用者回饋
-    if (sent) {
-      document.getElementById('out').textContent += '\n已送出記錄 ✅';
-    }
-  } catch (e) {
-    document.getElementById('out').textContent = 'ERR\n' + (e.code || '') + '\n' + (e.message || e);
   }
-})();
+
+  (async () => {
+    const s1 = document.getElementById('s1');
+    const s2 = document.getElementById('s2');
+    const s3 = document.getElementById('s3');
+    const s4 = document.getElementById('s4');
+    const $profile = document.getElementById('profile');
+    const $log = document.getElementById('log');
+
+    try {
+      s1.textContent = '初始化中…';
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+      s1.innerHTML = '<span class="ok">完成</span>';
+
+      if (!liff.isLoggedIn()) {
+        s2.textContent = '未登入 → 導向登入';
+        liff.login(); return;
+      }
+      s2.innerHTML = '<span class="ok">已登入</span>';
+
+      const prof = await liff.getProfile();
+      s3.innerHTML = '<span class="ok">成功</span>';
+      $profile.textContent = JSON.stringify(prof, null, 2);
+
+      const payload = {
+        userId: prof.userId,
+        displayName: prof.displayName,
+        action: DEFAULT_ACTION, // 可依不同圖文按鈕改值
+        source: 'liff'
+      };
+
+      const result = await sendOnce(payload);
+      s4.innerHTML = '<span class="ok">已送出</span>';
+      $log.textContent = `channel=${result}\npayload=${JSON.stringify(payload)}`;
+
+    } catch (e) {
+      s1.innerHTML = '<span class="err">失敗</span>';
+      $log.textContent = String(e?.message || e);
+    }
+  })();
 </script>
