@@ -1,31 +1,118 @@
 <!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LIFF 前端</title>
+<title>LIFF 前端｜逐步檢查版</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif;margin:20px}
+  .step{border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:10px}
+  .title{font-weight:600}
+  .ok{color:#16a34a}.err{color:#dc2626}.muted{color:#6b7280}
+  pre{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px;white-space:pre-wrap}
+  button{padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer}
+</style>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<pre id="out">啟動中…</pre>
+
+<h2>LIFF 逐步檢查</h2>
+<div id="steps"></div>
+
 <script>
 const LIFF_ID = '2008311996-D2KEdEnm';
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyRR-UxNfnJqZ7zJ4_660dCQShVGPhCEv81xldstO5fKct5y0E-u-QbhApJ8t0yS_v7/exec';
 
-(async () => {
-  try {
-    await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+/* 小工具：新增一個步驟區塊，並提供 ok()/fail()/log() */
+function stepBox(label){
+  const wrap = document.createElement('div'); wrap.className='step';
+  const title = document.createElement('div'); title.className='title'; title.textContent = label;
+  const status = document.createElement('span'); status.className='muted'; status.textContent='（等待）';
+  const pre = document.createElement('pre'); pre.textContent='';
+  wrap.appendChild(title); title.appendChild(document.createTextNode(' ')); title.appendChild(status);
+  wrap.appendChild(pre);
+  document.getElementById('steps').appendChild(wrap);
+  return {
+    log: (msg,obj)=>{ pre.textContent += (msg||'') + (obj ? '\n'+safeString(obj) : '') + '\n'; },
+    ok:  (msg,obj)=>{ status.className='ok'; status.textContent='✓ 成功'; if(msg) { pre.textContent += msg+'\n'; } if(obj){ pre.textContent += safeString(obj)+'\n'; }},
+    fail:(msg,obj)=>{ status.className='err'; status.textContent='✗ 失敗'; if(msg){ pre.textContent += msg+'\n'; } if(obj){ pre.textContent += safeString(obj)+'\n'; } }
+  };
+}
+function safeString(x){ try{ if(typeof x==='string') return x; return JSON.stringify(x,null,2);}catch{ return String(x); } }
 
-    const p = await liff.getProfile();
-    document.getElementById('out').textContent = 'OK\n' + JSON.stringify(p, null, 2);
+/* 主流程（每步獨立 try/catch，不會洗畫面） */
+(async function main(){
+  // Step 0: 環境
+  const s0 = stepBox('Step 0. 環境檢查');
+  try{
+    s0.log('userAgent: '+navigator.userAgent);
+    s0.log('liffInClient: '+(typeof liff.isInClient==='function'? liff.isInClient() : 'N/A'));
+    s0.ok('環境資訊已列出');
+  }catch(e){ s0.fail('讀取環境資訊失敗', e); }
 
-    // 用圖片 Beacon 送資料（完全避開 CORS）
+  // Step 1: LIFF 初始化
+  const s1 = stepBox('Step 1. 初始化 LIFF');
+  try{
+    s1.log('開始 init... LIFF_ID='+LIFF_ID);
+    // 加入 timeout，若逾時只標記本步失敗，不影響其他步紀錄
+    const initP = liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+    await Promise.race([
+      initP,
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('INIT_TIMEOUT')),10000))
+    ]);
+    s1.ok('init 完成，isLoggedIn='+liff.isLoggedIn());
+  }catch(e){ s1.fail('init 失敗', {code:e.code||null, message:e.message||String(e)}); }
+
+  // Step 2: 登入（如未登入）
+  const s2 = stepBox('Step 2. 檢查登入');
+  try{
+    if(!liff.isLoggedIn()){
+      s2.log('尚未登入，呼叫 liff.login()');
+      // 這行會把用戶導去登入；登入回來後會重新載入頁面
+      liff.login(); 
+      s2.ok('已呼叫 login（頁面將重載）');
+      return; // 後續步驟將在重載後執行
+    }else{
+      s2.ok('已登入');
+    }
+  }catch(e){ s2.fail('登入流程異常', e); }
+
+  // Step 3: 取得 Profile
+  let profile=null;
+  const s3 = stepBox('Step 3. 取得使用者資料');
+  try{
+    profile = await liff.getProfile();
+    s3.ok('取得成功', profile);
+  }catch(e){ s3.fail('getProfile 失敗（確認 LIFF scope: profile）', e); }
+
+  // Step 4（選一）: 送資料到 GAS（用圖片 Beacon 避開 CORS，最穩）
+  const s4 = stepBox('Step 4. 傳送到 GAS（Beacon 圖片 GET）');
+  try{
     const u = new URL(GAS_URL);
-    u.searchParams.set('userId', p.userId);
-    u.searchParams.set('name',   p.displayName);
+    u.searchParams.set('userId', profile?.userId || '');
+    u.searchParams.set('name',   profile?.displayName || '');
     u.searchParams.set('action', 'test');
     u.searchParams.set('source', 'liff');
-
     const img = new Image();
-    img.src = u.toString(); // 一載入就會觸發 GAS，GAS 會寫入試算表
-  } catch (e) {
-    document.getElementById('out').textContent = 'ERR\n' + (e.code || '') + '\n' + (e.message || e);
+    img.onload = ()=> s4.ok('已送出（onload）', u.toString());
+    img.onerror= ()=> s4.fail('圖片載入錯誤（但請先到 GAS 執行紀錄或試算表查看是否已寫入）', u.toString());
+    img.src = u.toString();
+    s4.log('已建立 beacon，URL 已設置：'); s4.log(u.toString());
+  }catch(e){ s4.fail('建立 beacon 失敗', e); }
+
+  // Step 5（可選）：用 fetch 測試回應（若你要讀回傳）
+  const s5 = stepBox('Step 5. 測試 fetch POST（可選，可能受 CORS 影響）');
+  try{
+    const resp = await fetch(GAS_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        userId: profile?.userId || '',
+        displayName: profile?.displayName || '',
+        action: 'test',
+        source: 'liff'
+      })
+    });
+    const text = await resp.text();
+    s5.ok('fetch 完成，HTTP '+resp.status, text);
+  }catch(e){
+    // 這裡只記錄，不覆蓋之前步驟
+    s5.fail('fetch 失敗（可能是 CORS，被擋也沒關係；已用 Step 4 送出）', {message:e.message||String(e)});
   }
 })();
 </script>
