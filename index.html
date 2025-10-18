@@ -3,99 +3,226 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LIFF 取號</title>
 <style>
-  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif;padding:20px}
-  .ok{color:#16a34a}.err{color:#dc2626}.muted{color:#6b7280}
-  .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
-  pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
+  :root{
+    --bg:#0b0b12; --card:#121225; --text:#e5e7eb; --muted:#9ca3af;
+    --brand:#6D28D9; --brand-2:#8B5CF6; --ok:#10b981; --err:#ef4444;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0; background: radial-gradient(1200px 700px at 20% -10%, rgba(109,40,217,.25), transparent),
+               radial-gradient(1200px 700px at 120% 110%, rgba(139,92,246,.2), transparent),
+               var(--bg);
+    color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .wrap{width:min(640px,92vw);}
+  .card{
+    background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+    border-radius:16px; padding:20px 18px; backdrop-filter: blur(6px);
+  }
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .muted{color:var(--muted)}
+  .ok{color:var(--ok)} .err{color:var(--err)}
+  pre{white-space:pre-wrap; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; color:#cbd5e1}
+  .btn{appearance:none; border:0; border-radius:12px; padding:12px 16px; font-weight:600; cursor:pointer}
+  .btn-primary{background:linear-gradient(90deg, var(--brand), var(--brand-2)); color:white}
+  .btn-ghost{background:transparent; border:1px solid rgba(255,255,255,.15); color:var(--text)}
+  .center{display:flex; align-items:center; justify-content:center}
+  .ticket{
+    width:96px; height:64px; border-radius:12px;
+    background:
+      linear-gradient(120deg, rgba(255,255,255,.18), rgba(255,255,255,0) 40%) no-repeat,
+      linear-gradient(90deg, var(--brand), var(--brand-2));
+    position:relative; box-shadow:0 10px 25px rgba(0,0,0,.35);
+    animation:bounce 1.1s ease-in-out infinite;
+  }
+  .ticket:before,.ticket:after{
+    content:""; position:absolute; width:14px; height:14px; background:var(--bg); border-radius:50%;
+    top:50%; transform:translateY(-50%);
+  }
+  .ticket:before{left:-7px} .ticket:after{right:-7px}
+  .shine{
+    position:absolute; inset:0; overflow:hidden; border-radius:12px; mix-blend-mode:screen;
+  }
+  .shine:before{
+    content:""; position:absolute; top:-40%; left:-20%; width:40%; height:180%;
+    background:linear-gradient(120deg, rgba(255,255,255,.0) 0%, rgba(255,255,255,.55) 45%, rgba(255,255,255,.0) 80%);
+    transform:rotate(20deg); animation:shine 1.6s linear infinite;
+  }
+  @keyframes shine{0%{transform:translateX(-120%) rotate(20deg)}100%{transform:translateX(320%) rotate(20deg)}}
+  @keyframes bounce{
+    0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}
+  }
+  .grid{display:grid; gap:14px; grid-template-columns:1fr 1fr}
+  .badge{display:inline-block; font-size:12px; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12)}
+  .count{font-weight:800; font-size:28px; letter-spacing:.5px}
 </style>
 
-<!-- 換成你的值 -->
+<!-- ⚙️ 換成你的值 -->
 <script>
   const LIFF_ID  = '2008311996-D2KEdEnm';  // 你的 LIFF ID
   const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec'; // 你的 GAS /exec
+
+  // 模式：預設 prod，自動關閉；?mode=dev 進入開發模式（不自動關 + 顯示詳盡日誌）
+  const DEFAULT_MODE = 'prod';
 </script>
 
-<div class="card"><b>Step 1.</b> 初始化 LIFF… <span id="s1" class="muted"></span></div>
-<div class="card"><b>Step 2.</b> 登入狀態 <span id="s2" class="muted"></span></div>
-<div class="card"><b>Step 3.</b> 取得使用者資料 <span id="s3" class="muted"></span><pre id="p" class="muted"></pre></div>
-<div class="card"><b>Step 4.</b> 送出動作 <span id="s4" class="muted"></span><pre id="log" class="muted"></pre></div>
+<div class="wrap">
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:6px">
+      <div><b>LIFF 取號</b> <span class="badge" id="modeBadge">mode: prod</span></div>
+      <div class="muted" id="stepHint">初始化 LIFF…</div>
+    </div>
+
+    <div class="center" style="margin:12px 0 8px">
+      <div class="ticket">
+        <div class="shine"></div>
+      </div>
+    </div>
+
+    <div class="center muted" style="margin-bottom:14px">
+      <span id="animHint">準備抽號碼牌…</span>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="muted">狀態</div>
+        <div id="status" class="ok">啟動中</div>
+      </div>
+      <div style="text-align:right">
+        <div class="muted">關閉倒數</div>
+        <div id="countdown" class="count">—</div>
+      </div>
+    </div>
+
+    <div id="logWrap" style="margin-top:12px; display:none">
+      <div class="muted" style="margin-bottom:6px">開發日誌</div>
+      <pre id="log"></pre>
+    </div>
+
+    <div class="row" style="margin-top:10px; justify-content:flex-end; gap:10px">
+      <button class="btn btn-ghost" id="closeNow" style="display:none">立即關閉</button>
+      <button class="btn btn-primary" id="openChat" style="display:none">回到聊天室</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
-  // 讀取 URL 參數：'default'（取號） | 'view'（查看） | 'renew'（重新領取）
+(async () => {
+  // 讀取參數：action（default/view/renew）、mode（prod/dev）
   const qs = new URL(location.href).searchParams;
   const action = (qs.get('action') || 'default').toLowerCase();
+  const mode = (qs.get('mode') || DEFAULT_MODE).toLowerCase();
+  const isDev = mode === 'dev';
+  document.getElementById('modeBadge').textContent = `mode: ${mode}`;
 
-  // 只對「default 取號」做輕量防連點；view/renew 不節流，避免「按了沒反應」
-  const today = () => {
-    const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const $ = (id)=>document.getElementById(id);
+  const log = (...a)=>{ if(isDev){ $('logWrap').style.display='block'; $('log').textContent += a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' ')+'\n'; } };
+
+  const setStatus = (t, cls='')=>{
+    const el=$('status'); el.textContent=t; el.className=cls||'';
   };
-  const sentKey = (uid, act) => `liff_sent:${LIFF_ID}:${uid}:${today()}:${act}`;
+  const setAnimHint = (t)=>$('animHint').textContent=t;
 
+  // 倒數與自動關閉
+  function autoClose(seconds){
+    const el=$('countdown');
+    let n=seconds;
+    const timer=setInterval(()=>{
+      el.textContent = n + 's';
+      n--;
+      if(n<0){
+        clearInterval(timer);
+        // prod 模式才關，dev 只顯示按鈕
+        if(!isDev){
+          try{
+            if (liff.isInClient()) liff.closeWindow();
+            else window.close();
+          }catch(_){ /* ignore */ }
+        } else {
+          $('closeNow').style.display='inline-block';
+        }
+      }
+    },1000);
+  }
+
+  // 送資料到 GAS：POST 為主，失敗改 Beacon
   async function sendToGas(payload){
-    // 1) 首選：POST（text/plain 避 iOS 預檢）
     try{
-      await fetch(GAS_EXEC,{
+      const res = await fetch(GAS_EXEC, {
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify(payload)
       });
+      log('POST status', res.status);
       return 'ok:fetch';
-    }catch(_){
-      // 2) 失敗 → Beacon GET（必過 CORS）
-      const u=new URL(GAS_EXEC);
+    }catch(e){
+      log('POST failed → beacon', e?.message||e);
+      const u = new URL(GAS_EXEC);
       u.searchParams.set('userId', payload.userId);
-      u.searchParams.set('name',   payload.displayName || '');
+      u.searchParams.set('name', payload.displayName || '');
       u.searchParams.set('action', payload.action);
       u.searchParams.set('source', payload.source || 'liff');
-      u.searchParams.set('cb', Date.now()); // cache buster，避免 iOS 不重載
+      u.searchParams.set('cb', Date.now());
       (new Image()).src = u.toString();
       return 'ok:beacon';
     }
   }
 
-  (async()=>{
-    const s1=document.getElementById('s1'), s2=document.getElementById('s2'),
-          s3=document.getElementById('s3'), s4=document.getElementById('s4'),
-          P=document.getElementById('p'),  LOG=document.getElementById('log');
+  // UI 控制
+  $('closeNow').onclick = ()=>{
+    try{ if (liff.isInClient()) liff.closeWindow(); else window.close(); }catch(_){}
+  };
+  $('openChat').onclick = ()=>{
+    try{ liff.closeWindow(); }catch(_){}
+  };
 
-    try{
-      s1.textContent='初始化中…';
-      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser:true });
-      s1.innerHTML='<span class="ok">完成</span>';
+  try{
+    $('stepHint').textContent = '初始化 LIFF…';
+    await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser:true });
+    setStatus('已初始化 ✅','ok'); log('LIFF init ok');
 
-      if(!liff.isLoggedIn()){ s2.textContent='未登入 → 導向登入'; liff.login(); return; }
-      s2.innerHTML='<span class="ok">已登入</span>';
-
-      const prof = await liff.getProfile();
-      s3.innerHTML='<span class="ok">成功</span>';
-      P.textContent = JSON.stringify(prof, null, 2);
-
-      // default：一天只送一次（前端側防手抖；後端也有去重 & 節流，雙保險）
-      if (action === 'default') {
-        const key = sentKey(prof.userId, 'default');
-        if (sessionStorage.getItem(key)) {
-          s4.innerHTML = '<span class="muted">今日已送出</span>';
-          LOG.textContent = '您今天已送出取號，請回聊天室查看訊息。';
-          return;
-        }
-        sessionStorage.setItem(key, '1');
-      }
-
-      const payload = { userId: prof.userId, displayName: prof.displayName, action, source:'liff' };
-      const channel = await sendToGas(payload);
-
-      s4.innerHTML = '<span class="ok">已送出</span>';
-      if (action === 'view') {
-        LOG.textContent = `已送出「查看號碼牌」請求，請回到聊天室查看訊息。\n(${channel})`;
-      } else if (action === 'renew') {
-        LOG.textContent = `已送出「重新領取」請求，請回到聊天室查看訊息。\n(${channel})`;
-      } else {
-        LOG.textContent = `已送出取號，請回到聊天室查看號碼牌。\n(${channel})`;
-      }
-    }catch(e){
-      s1.innerHTML='<span class="err">失敗</span>';
-      LOG.textContent = (e && e.message) ? e.message : String(e);
+    if(!liff.isLoggedIn()){
+      setStatus('未登入，導向登入…','muted'); log('login redirect');
+      return liff.login();
     }
-  })();
+    $('stepHint').textContent = '取得使用者…';
+    const prof = await liff.getProfile();
+    log('profile', prof);
+
+    // 動畫提示文案
+    if (action === 'renew') setAnimHint('正在重新領取新號碼…');
+    else if (action === 'view') setAnimHint('查詢您的號碼牌…');
+    else setAnimHint('正在抽取您的號碼…');
+
+    // 送出
+    setStatus('送出中…','muted');
+    const channel = await sendToGas({ userId: prof.userId, displayName: prof.displayName, action, source:'liff' });
+    log('send channel', channel);
+
+    // 完成後提示 + 倒數關閉
+    if (action === 'view'){
+      setStatus('已送出查看請求，請回聊天室查看 📨','ok');
+      $('openChat').style.display='inline-block';
+      autoClose(3);
+    } else if (action === 'renew') {
+      setStatus('重新領取成功，請回聊天室查看新號碼 📨','ok');
+      $('openChat').style.display='inline-block';
+      autoClose(5);
+    } else {
+      setStatus('取號成功，請回聊天室查看 🎟️','ok');
+      $('openChat').style.display='inline-block';
+      autoClose(5);
+    }
+
+  }catch(e){
+    setStatus('發生錯誤：' + (e?.message || e), 'err'); log('error', e);
+    setAnimHint('請返回上一頁或稍後再試');
+    $('openChat').style.display='inline-block';
+    // 失敗情況不自動關閉，保留畫面供截圖/回報
+  }
+})();
 </script>
