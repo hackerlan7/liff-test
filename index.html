@@ -3,209 +3,225 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>LIFF 取號</title>
 <style>
-  :root{--violet:#7c3aed;--indigo:#4f46e5;--bg:#0f0b1f;--card:#1b1633}
-  body{margin:0;background:radial-gradient(80% 80% at 50% 0%,#1e1442,#0f0b1f);color:#eef; 
-       font-family:ui-sans-serif,system-ui,-apple-system,"PingFang TC",Segoe UI,Roboto}
-  .wrap{max-width:920px;margin:28px auto;padding:0 16px}
-  .card{background:#15122a80;border:1px solid #ffffff14;border-radius:20px;padding:18px;margin:18px 0;
-        box-shadow:0 10px 50px #0006}
-  .row{display:flex;gap:16px;flex-wrap:wrap}
-  .kpi{flex:1 1 360px;background:linear-gradient(135deg,#6d28d9,#8b5cf6);border-radius:28px;padding:28px;
-       display:flex;justify-content:center;align-items:center;position:relative;box-shadow:0 20px 60px #4b1ab540}
-  .kpi:before,.kpi:after{content:"";position:absolute;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;
-                         background:#0e0a1f;border:6px solid #00000055}
-  .kpi:before{left:-9px}.kpi:after{right:-9px}
-  .ticket{font-size:56px;font-weight:800;letter-spacing:2px}
-  .muted{color:#aab}
-  .ok{color:#22c55e}.err{color:#ef4444}
-  pre{background:#0b0a19;border:1px solid #ffffff1a;color:#a7b5ff;padding:12px;border-radius:12px;white-space:pre-wrap;overflow:auto}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:12px;border:0;
-       background:linear-gradient(135deg,var(--violet),var(--indigo));color:#fff;font-weight:700;cursor:pointer}
-  .btn-ghost{background:#ffffff10;color:#e8e8ff}
-  .badge{font-size:12px;background:#ffffff1a;border:1px solid #ffffff26;color:#ddd;padding:4px 8px;border-radius:999px}
-  .tag{display:inline-flex;gap:8px;align-items:center}
+  :root{--bg:#0b0b12;--text:#e5e7eb;--muted:#9ca3af;--brand:#6D28D9;--brand-2:#8B5CF6;--ok:#10b981;--err:#ef4444}
+  html,body{height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 700px at 20% -10%, rgba(109,40,217,.25), transparent),
+      radial-gradient(1200px 700px at 120% 110%, rgba(139,92,246,.2), transparent),
+      var(--bg);
+    color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;padding:16px
+  }
+  .wrap{width:min(760px,96vw)}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .muted{color:var(--muted)} .ok{color:var(--ok)} .err{color:var(--err)}
+  pre{white-space:pre-wrap;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px;color:#cbd5e1;max-height:36vh;overflow:auto}
+  .ticket{width:min(320px,80vw);height:160px;border-radius:16px;position:relative;background:linear-gradient(90deg,var(--brand),var(--brand-2));box-shadow:0 10px 25px rgba(0,0,0,.35)}
+  .ticket:before,.ticket:after{content:"";position:absolute;width:24px;height:24px;background:var(--bg);border-radius:50%;top:50%;transform:translateY(-50%)} .ticket:before{left:-12px}.ticket:after{right:-12px}
+  .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:68px;color:#fff;letter-spacing:1px}
+  .subtitle{position:absolute;bottom:8px;width:100%;text-align:center;font-size:13px;color:#f0f0f0;opacity:.9}
+  .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer}
+  .btn-primary{background:linear-gradient(90deg,var(--brand),var(--brand-2));color:#fff}
+  .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--text)}
+  .devbar{display:none;gap:8px;margin-top:10px}
+  .pop{animation:pop .5s ease-out forwards}
+  @keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
 </style>
 
 <script>
-  /* ==== 你的設定 ==== */
-  const LIFF_ID    = '2008311996-D2KEdEnm';
-  const GAS_EXEC   = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec';
-  const MODE       = 'prod';          // 'prod' 自動倒數關閉；'dev' 只顯示倒數不自動關
-  const AUTO_CLOSE_SECONDS = 5;       // 倒數秒數
+  // ← 換成你的
+  const LIFF_ID  = '2008311996-D2KEdEnm';
+  const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec';
+
+  const DEFAULT_MODE = 'prod';       // prod: 自動倒數關閉；dev: 顯示日誌 & 測試按鈕，不自動關
+  const VIEW_RETRY_MAX = 6;          // GET 查票最大重試次數
+  const VIEW_RETRY_DELAY = 650;      // 重試間隔 (ms)
+  const AUTO_CLOSE_SECONDS = 5;      // 倒數秒數（prod）
 </script>
 
 <div class="wrap">
-  <h1 style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-    <span>LIFF 取號</span>
-    <span class="badge">mode: <b id="mode"></b></span>
-  </h1>
-
   <div class="card">
-    <div class="row">
-      <div class="kpi">
-        <div style="text-align:center">
-          <div id="ticket" class="ticket">—</div>
-          <div id="subtitle" class="muted" style="margin-top:8px">初始化中…</div>
-        </div>
-      </div>
-      <div style="flex:1 1 260px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div class="tag">狀態：<b id="status" class="muted">啟動中…</b></div>
-          <div class="tag">關閉倒數 <b id="cd" style="font-variant-numeric:tabular-nums">—</b></div>
-        </div>
-        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn" id="btnBack">回到聊天室</button>
-          <button class="btn btn-ghost" id="btnReload">重新整理</button>
-        </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><b>LIFF 取號</b> <span class="muted" id="mode">prod</span></div>
+      <div class="muted" id="step">初始化 LIFF…</div>
+    </div>
+
+    <div style="display:flex;justify-content:center;margin:10px 0 12px">
+      <div class="ticket">
+        <div class="num" id="num">—</div>
+        <div class="subtitle" id="sub">正在抽取您的號碼…</div>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <b>開發日誌</b>
-    <pre id="log" class="muted"></pre>
+    <div class="row" style="margin-top:6px">
+      <div>
+        <span class="muted">狀態</span> <span id="status" class="">啟動中…</span>
+        <span class="muted" id="cd" style="margin-left:8px;display:none">(5s)</span>
+      </div>
+      <div>
+        <button class="btn btn-ghost" id="btnClose" style="display:none">回到聊天室</button>
+      </div>
+    </div>
+
+    <div class="devbar" id="devbar">
+      <button class="btn btn-primary" id="btnDefault">抽號碼牌</button>
+      <button class="btn btn-ghost"   id="btnView">查看號碼</button>
+      <button class="btn btn-ghost"   id="btnRenew">重新領取</button>
+    </div>
+
+    <div id="logBox" style="display:none;margin-top:10px">
+      <div class="muted" style="margin-bottom:6px">開發日誌</div>
+      <pre id="log"></pre>
+    </div>
   </div>
 </div>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
-(function(){
+(async () => {
+  const qs   = new URL(location.href).searchParams;
+  const act  = (qs.get('action') || 'default').toLowerCase();  // default|view|renew
+  const mode = (qs.get('mode') || DEFAULT_MODE).toLowerCase();
+  const isDev = mode === 'dev';
+
   const $ = (id)=>document.getElementById(id);
-  $('mode').textContent = MODE;
+  const log = (...a)=>{ if(isDev){ $('logBox').style.display='block'; $('log').textContent += '['+new Date().toLocaleTimeString()+'] '+a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' ')+'\n'; } };
+  $('mode').textContent = mode;
 
-  const qs = new URL(location.href).searchParams;
-  const actionParam = qs.get('action') || 'default';
-  const noClose     = qs.get('noclose') === '1';
-
-  const logLines = [];
-  const log = (...args)=>{ 
-    const line = args.map(v=> (typeof v==='string'?v:JSON.stringify(v))).join(' ');
-    logLines.push(line);
-    $('log').textContent = logLines.join('\n');
-    console.log(...args);
-  };
-
-  let timerId = null;
-  let remain = AUTO_CLOSE_SECONDS;
-
-  function startCountdown() {
-    // dev 模式或 noclose 時只顯示不關閉
-    if (MODE === 'dev' || noClose) {
-      $('cd').textContent = `${AUTO_CLOSE_SECONDS}s`;
-      return;
-    }
-    remain = AUTO_CLOSE_SECONDS;
-    $('cd').textContent = `${remain}s`;
-    clearInterval(timerId);
-    timerId = setInterval(()=>{
-      remain--;
-      $('cd').textContent = `${remain}s`;
-      if (remain <= 0) {
-        clearInterval(timerId);
-        try {
-          if (liff.isInClient()) {
-            liff.closeWindow();
-          } else {
-            // 外部瀏覽器無法強制關閉 → 導回聊天首頁
-            location.href = 'line://nv/chat';
-          }
-        } catch(e) {
-          log('close error', e);
-        }
-      }
-    }, 1000);
+  // dev 模式提供測試按鈕
+  if(isDev){
+    $('devbar').style.display='flex';
+    $('btnDefault').onclick = ()=> location.href = location.pathname + '?action=default&mode=dev';
+    $('btnView').onclick    = ()=> location.href = location.pathname + '?action=view&mode=dev';
+    $('btnRenew').onclick   = ()=> location.href = location.pathname + '?action=renew&mode=dev';
   }
 
-  async function sendOnce(payload){
-    // 首選：POST（GAS 允許 JSON）
+  // 亂數輪播
+  let rolling=null;
+  function startRoll(){ if(rolling) return; rolling=setInterval(()=>{ $('num').textContent = '#'+String(Math.floor(Math.random()*1000)).padStart(3,'0'); }, 45); }
+  function stopRoll(){ if(rolling){ clearInterval(rolling); rolling=null; } }
+  function showTicket(n){ stopRoll(); $('num').textContent = '#'+String(n).padStart(3,'0'); document.querySelector('.ticket').classList.add('pop'); }
+
+  const setHint=t=> $('sub').textContent=t;
+  const setStatus=(t,cls='')=>{ const el=$('status'); el.textContent=t; el.className=cls; };
+
+  // 倒數顯示 & 自動關閉（prod）
+  let cdTimer = null;
+  function startCountdown(sec=AUTO_CLOSE_SECONDS){
+    const cdEl = $('cd');
+    const btn  = $('btnClose');
+    cdEl.style.display = 'inline';
+    btn.textContent = `回到聊天室 (${sec}s)`;
+    cdEl.textContent = `(${sec}s)`;
+    if (isDev) return; // dev 只顯示不關
+    clearInterval(cdTimer);
+    cdTimer = setInterval(()=>{
+      sec--;
+      btn.textContent = `回到聊天室 (${sec}s)`;
+      cdEl.textContent = `(${sec}s)`;
+      if (sec <= 0){
+        clearInterval(cdTimer);
+        try{
+          if (liff.isInClient()) liff.closeWindow();
+          else window.close();
+        }catch(_){ window.close(); }
+      }
+    },1000);
+  }
+  function enableCloseUI(){
+    $('btnClose').style.display='inline-block';
+    $('btnClose').onclick = ()=>{
+      try{
+        if (liff.isInClient()) liff.closeWindow();
+        else window.close();
+      }catch(_){ window.close(); }
+    };
+    startCountdown(); // 顯示倒數 + 視情況自動關
+  }
+
+  try{
+    $('step').textContent = '初始化 LIFF…';
+    await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser:true });
+    if(!liff.isLoggedIn()){ if(isDev) log('not logged in → login'); return liff.login(); }
+
+    setStatus('已登入 ✅','ok');
+    const prof = await liff.getProfile();
+    if(isDev){ log('UA:', navigator.userAgent); log('GAS_EXEC:', GAS_EXEC); log('Location:', location.href); log('liff.isInClient=', liff.isInClient(), ' os=', liff.getOS(), ' language=', liff.getLanguage()); log('profile', prof); }
+
+    // 提示字
+    if (act==='view') setHint('查詢您的號碼牌…');
+    else if (act==='renew') setHint('正在重新領取…');
+    else setHint('正在抽取您的號碼…');
+
+    startRoll();
+
+    // 送出
+    const payload = { userId: prof.userId, displayName: prof.displayName, action: act, source: 'liff' };
+    if(isDev) log('POST →', payload);
+
+    let postJson = null;
     try{
-      log('POST →', JSON.stringify(payload,null,2));
-      const r = await fetch(GAS_EXEC, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json;charset=utf-8'},
-        body: JSON.stringify(payload)
-      });
-      log('POST status', r.status);
-      const json = await r.json().catch(()=>null);
-      if (json) log('POST json', JSON.stringify(json,null,2));
-      return json;
+      const res = await fetch(GAS_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), redirect:'follow', cache:'no-store', mode:'cors' });
+      if(isDev) log('POST status', res.status, res.statusText);
+      postJson = await res.json().catch(err => { if(isDev) log('POST json parse err', String(err)); return null; });
+      if(isDev) log('POST json', postJson);
     }catch(e){
-      log('POST error', String(e));
-      // 備援：GET 像素
+      if(isDev) log('POST error', String(e));
+      // Beacon 當保底
       const u = new URL(GAS_EXEC);
       u.searchParams.set('userId', payload.userId);
-      u.searchParams.set('name', payload.displayName||'');
+      u.searchParams.set('name',   payload.displayName || '');
       u.searchParams.set('action', payload.action);
-      u.searchParams.set('source', payload.source||'liff');
-      u.searchParams.set('cb', Date.now());
+      u.searchParams.set('source', payload.source);
+      u.searchParams.set('cb',     Date.now());
       const img = new Image();
-      img.onerror = ()=> log('BEACON onerror', {isTrusted:true});
+      img.onload  = ()=> isDev && log('BEACON onload');
+      img.onerror = (ev)=> isDev && log('BEACON onerror', JSON.stringify(ev));
       img.src = u.toString();
-      return null;
+      if(isDev) log('Beacon URL', img.src);
     }
-  }
 
-  function showTicket(n, note){
-    $('ticket').textContent = n ? `#${n}` : '—';
-    $('subtitle').textContent = note || '';
-  }
+    // 先看 POST 回票
+    let ticket = postJson && postJson.result && postJson.result.ticket ? postJson.result.ticket : null;
 
-  // 事件按鈕
-  $('btnBack').onclick = ()=>{
-    remain = 1; // 立即觸發
-    startCountdown();
-  };
-  $('btnReload').onclick = ()=> location.reload();
-
-  (async () => {
-    try {
-      log(`[${new Date().toLocaleTimeString()}] UA: ${navigator.userAgent}`);
-      log(`[${new Date().toLocaleTimeString()}] GAS_EXEC: ${GAS_EXEC}`);
-      log(`[${new Date().toLocaleTimeString()}] Location: ${location.href}`);
-
-      $('status').textContent = '初始化 LIFF…';
-      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser:true });
-      const inClient = liff.isInClient();
-      $('status').innerHTML = `<span class="ok">已載入</span>`;
-      log(`liff.isInClient=${inClient} os=${liff.getOS()} language=${liff.getLanguage()}`);
-
-      if (!liff.isLoggedIn()) {
-        $('status').textContent = '未登入 → 導向登入';
-        return liff.login();
-      }
-
-      // 取得個資
-      const prof = await liff.getProfile();
-      log('profile', JSON.stringify(prof,null,2));
-      $('status').innerHTML = '已登入 ✅';
-      $('subtitle').textContent = '正在抽取您的號碼…';
-
-      // 丟到後端
-      const payload = { userId: prof.userId, displayName: prof.displayName, action: actionParam, source: 'liff' };
-      const res = await sendOnce(payload);
-
-      // 根據後端回應顯示號碼（若後端有回 ticket）
-      let ticket = null, note = '';
-      if (res && res.result) {
-        ticket = res.result.ticket || null;
-        const mode = res.result.mode;
-        if (mode === 'already') note = '您今天已取號';
-        else if (mode === 'new') note = '取號成功';
-        else if (mode === 'renew') note = '已重新領取';
-        else if (mode === 'view') note = '目前號碼';
-      } else {
-        note = '已送出請求，請回聊天室查看';
-      }
-      showTicket(ticket, note);
-
-      // 啟動倒數（prod 且在 LINE 內才會自動關）
-      startCountdown();
-
-    } catch (e) {
-      $('status').innerHTML = `<span class="err">發生錯誤：${e?.message||e}</span>`;
-      log('ERR', e);
-      $('subtitle').textContent = '請返回上一頁或稍後再試';
+    // 沒有 → 用 GET format=json 補查
+    for(let i=0; !ticket && i<VIEW_RETRY_MAX; i++){
+      await new Promise(r=>setTimeout(r, VIEW_RETRY_DELAY));
+      const url = new URL(GAS_EXEC);
+      url.searchParams.set('format','json');
+      url.searchParams.set('action','view');
+      url.searchParams.set('userId', payload.userId);
+      url.searchParams.set('name',   payload.displayName || '');
+      if(isDev) log(`GET try ${i+1} →`, url.toString());
+      try{
+        const r = await fetch(url.toString(), { method:'GET', cache:'no-store', mode:'cors' });
+        if(isDev) log('GET status', r.status, r.statusText);
+        const j = await r.json().catch(err=>{ if(isDev) log('GET json parse err', String(err)); return null; });
+        if(isDev) log('GET json', j);
+        ticket = j && j.result && j.result.ticket ? j.result.ticket : null;
+      }catch(e){ if(isDev) log('GET error', String(e)); }
     }
-  })();
+
+    if (ticket){
+      showTicket(ticket);
+      setHint('已取得號碼，請回聊天室查看');
+      setStatus('完成 ✅','ok');
+      enableCloseUI();
+    }else{
+      stopRoll();
+      $('num').textContent='—';
+      setHint('已送出請求，請回聊天室查看');
+      setStatus('已送出','ok');
+      enableCloseUI();
+    }
+  }catch(e){
+    stopRoll();
+    $('num').textContent='—';
+    setHint('請稍後再試');
+    setStatus('發生錯誤：'+(e?.message||e),'err');
+    if(isDev) log('FATAL', String(e), e?.stack);
+  }
 })();
 </script>
