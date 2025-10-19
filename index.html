@@ -35,7 +35,7 @@
   const LIFF_ID  = '2008311996-D2KEdEnm';
   const GAS_EXEC = 'https://script.google.com/macros/s/AKfycbzQhqzkAq0V4DqTgh7cSVt-lT1_N0AhRkwutfhZK8yeXPaB2mbG7r6X4g3VQNIzY9r4/exec';
 
-  const DEFAULT_MODE = 'prod';            // 用 ?mode=dev 可看日誌
+  const DEFAULT_MODE = 'dev';            // 用 ?mode=dev 可看日誌
   const ROLL_INTERVAL = 45;               // 亂數號碼更新間隔(ms)
   const VIEW_RETRY_MAX = 5;               // GET 查票 最大重試次數
   const VIEW_RETRY_DELAY = 600;           // 每次重試間隔(ms)
@@ -44,7 +44,7 @@
 <div class="wrap">
   <div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:6px">
-      <div><b>LIFF 取號</b> <span class="muted" id="modeBadge">mode: prod</span></div>
+      <div><b>LIFF 取號</b> <span class="muted" id="modeBadge">mode: dev</span></div>
       <div class="muted" id="step">初始化 LIFF…</div>
     </div>
 
